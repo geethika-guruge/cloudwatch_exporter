@@ -1,18 +1,20 @@
 package main
 
 import (
-	"../main"
 	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/technofy/cloudwatch_exporter/collector"
+
+	"os"
+	"sync"
+
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/technofy/cloudwatch_exporter/config"
-	"os"
-	"sync"
 )
 
 type Request struct {
@@ -49,7 +51,7 @@ func loadConfigFile() error {
 		return err
 	}
 
-	generateTemplates(tmpSettings)
+	collector.GenerateTemplates(tmpSettings)
 
 	settings = tmpSettings
 	configMutex.Unlock()
@@ -112,7 +114,7 @@ func handleTarget(request Request) (Response, error) {
 
 	configMutex.Lock()
 	registry := prometheus.NewRegistry()
-	collector, err := NewCwCollector(target, task, region, roleArn)
+	collector, err := collector.NewCwCollector(target, task, region, roleArn, settings)
 	if err != nil {
 		// Can't create the collector, display error
 		//fmt.Fprintf(w, "Error: %s\n", err.Error())

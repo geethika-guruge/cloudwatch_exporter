@@ -1,9 +1,6 @@
 package main
 
 import (
-	"./collector"
-	"./config"
-
 	"errors"
 	"flag"
 	"fmt"
@@ -11,9 +8,12 @@ import (
 	"net/http/httptest"
 	"os"
 
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"sync"
+	"github.com/technofy/cloudwatch_exporter/collector"
+	"github.com/technofy/cloudwatch_exporter/config"
 )
 
 var (

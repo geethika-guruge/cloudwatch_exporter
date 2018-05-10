@@ -1,10 +1,11 @@
 package collector
 
 import (
-	"../config"
 	"errors"
-	"github.com/prometheus/client_golang/prometheus"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/technofy/cloudwatch_exporter/config"
 )
 
 var (
