@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
+	"github.com/aws/aws-xray-sdk-go/xray"
 	"github.com/prometheus/client_golang/prometheus"
 	"regexp"
 	"strings"
@@ -41,6 +42,7 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 	} else {
 		svc = cloudwatch.New(session)
 	}
+	xray.AWS(svc.Client)
 	for m := range collector.Template.Metrics {
 		metric := &collector.Template.Metrics[m]
 
@@ -112,9 +114,8 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 		if len(metric.ConfMetric.DimensionsSelectRegex) == 0 {
 			continue
 		}
-
 		// Get all the metric to select the ones who'll match the regex
-		result, err := svc.ListMetrics(&cloudwatch.ListMetricsInput{
+		result, err := svc.ListMetricsWithContext(collector.Context, &cloudwatch.ListMetricsInput{
 			MetricName: aws.String(metric.ConfMetric.Name),
 			Namespace:  aws.String(metric.ConfMetric.Namespace),
 		})
@@ -128,7 +129,7 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 		}
 
 		for nextToken != nil {
-			result, err := svc.ListMetrics(&cloudwatch.ListMetricsInput{
+			result, err := svc.ListMetricsWithContext(collector.Context, &cloudwatch.ListMetricsInput{
 				MetricName: aws.String(metric.ConfMetric.Name),
 				Namespace:  aws.String(metric.ConfMetric.Namespace),
 				NextToken:  nextToken,
@@ -188,7 +189,7 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 //Send a single dataPoint to the Prometheus lib
 func scrapeSingleDataPoint(collector *cwCollector, ch chan<- prometheus.Metric, params *cloudwatch.GetMetricStatisticsInput, metric *cwMetric, labels []string, svc *cloudwatch.CloudWatch) error {
 
-	resp, err := svc.GetMetricStatistics(params)
+	resp, err := svc.GetMetricStatisticsWithContext(collector.Context, params)
 	totalRequests.Inc()
 
 	if err != nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -51,7 +52,7 @@ func loadConfigFile() error {
 }
 
 // handleTarget handles scrape requests which make use of CloudWatch service
-func handleTarget(request Request) (Response, error) {
+func handleTarget(ctx context.Context, request Request) (Response, error) {
 	req, reqErr := http.NewRequest("GET", "http://example.com/foo", nil)
 
 	if reqErr != nil {
@@ -87,7 +88,7 @@ func handleTarget(request Request) (Response, error) {
 
 	configMutex.Lock()
 	registry := prometheus.NewRegistry()
-	collector, err := collector.NewCwCollector(target, task, region, roleArn, settings)
+	collector, err := collector.NewCwCollector(target, task, region, roleArn, settings, ctx)
 	if err != nil {
 		// Can't create the collector, display error
 		fmt.Println("Error: %s\n", err.Error())

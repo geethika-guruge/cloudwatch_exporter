@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/aws/aws-xray-sdk-go/xray"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/technofy/cloudwatch_exporter/collector"
@@ -56,6 +57,9 @@ func handleReload(w http.ResponseWriter, req *http.Request) {
 
 // handleTarget handles scrape requests which make use of CloudWatch service
 func handleTarget(w http.ResponseWriter, req *http.Request) {
+
+	ctx, _ := xray.BeginSegment(req.Context(), "monitoring")
+
 	urlQuery := req.URL.Query()
 
 	target := urlQuery.Get("target")
@@ -71,7 +75,7 @@ func handleTarget(w http.ResponseWriter, req *http.Request) {
 
 	configMutex.Lock()
 	registry := prometheus.NewRegistry()
-	collector, err := collector.NewCwCollector(target, task, region, roleArn, settings)
+	collector, err := collector.NewCwCollector(target, task, region, roleArn, settings, ctx)
 	if err != nil {
 		// Can't create the collector, display error
 		fmt.Fprintf(w, "Error: %s\n", err.Error())
