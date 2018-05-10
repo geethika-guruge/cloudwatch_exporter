@@ -100,3 +100,18 @@ tasks:
       aws_dimensions: [FunctionName]
       aws_metric_name: Duration
       aws_statistics: [Maximum]
+
+ - name: elb_mon
+   default_region: us-west-2
+   metrics:
+    - aws_namespace: AWS/ELB
+      aws_metric_name: HealthyHostCount
+      aws_dimensions: [AvailabilityZone, LoadBalancerName]
+      aws_statistics: [Average]
+      fetch_load_balancer_tags: true
+
+    - aws_namespace: AWS/ELB
+      aws_metric_name: UnHealthyHostCount
+      aws_dimensions: [AvailabilityZone, LoadBalancerName]
+      aws_statistics: [Average]
+      fetch_load_balancer_tags: true

@@ -1,14 +1,16 @@
-package main
+package collector
 
 import (
+	"../config"
 	"errors"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/technofy/cloudwatch_exporter/config"
 	"time"
 )
 
 var (
-	templates = map[string]*cwCollectorTemplate{}
+	templates      = map[string]*cwCollectorTemplate{}
+	globalRegistry *prometheus.Registry
+	totalRequests  prometheus.Counter
 )
 
 type cwMetric struct {
@@ -35,7 +37,7 @@ type cwCollector struct {
 }
 
 // generateTemplates creates pre-generated metrics descriptions so that only the metrics are created from them during a scrape.
-func generateTemplates(cfg *config.Settings) {
+func GenerateTemplates(cfg *config.Settings) {
 	for t := range cfg.Tasks {
 		var template = new(cwCollectorTemplate)
 
@@ -76,7 +78,7 @@ func generateTemplates(cfg *config.Settings) {
 // NewCwCollector creates a new instance of a CwCollector for a specific task
 // The newly created instance will reference its parent template so that metric descriptions are not recreated on every call.
 // It returns either a pointer to a new instance of cwCollector or an error.
-func NewCwCollector(target string, taskName string, region string, roleArn string) (*cwCollector, error) {
+func NewCwCollector(target string, taskName string, region string, roleArn string, settings *config.Settings) (*cwCollector, error) {
 	// Check if task exists
 	task, err := settings.GetTask(taskName)
 
@@ -91,7 +93,16 @@ func NewCwCollector(target string, taskName string, region string, roleArn strin
 			region = task.DefaultRegion
 		}
 	}
+	globalRegistry = prometheus.NewRegistry()
 
+	totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "cloudwatch_requests_total",
+		Help: "API requests made to CloudWatch",
+	})
+
+	globalRegistry.MustRegister(totalRequests)
+
+	prometheus.DefaultGatherer = globalRegistry
 	return &cwCollector{
 		Region:  region,
 		Target:  target,
