@@ -62,6 +62,7 @@ func handleTarget(w http.ResponseWriter, req *http.Request) {
 	target := urlQuery.Get("target")
 	task := urlQuery.Get("task")
 	region := urlQuery.Get("region")
+	roleArn := urlQuery.Get("roleArn")
 
 	// Check if we have all the required parameters in the URL
 	if task == "" {
@@ -71,7 +72,7 @@ func handleTarget(w http.ResponseWriter, req *http.Request) {
 
 	configMutex.Lock()
 	registry := prometheus.NewRegistry()
-	collector, err := NewCwCollector(target, task, region)
+	collector, err := NewCwCollector(target, task, region, roleArn)
 	if err != nil {
 		// Can't create the collector, display error
 		fmt.Fprintf(w, "Error: %s\n", err.Error())

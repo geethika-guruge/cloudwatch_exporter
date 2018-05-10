@@ -3,12 +3,13 @@ package main
 import (
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/prometheus/client_golang/prometheus"
-	"time"
 	"regexp"
 	"strings"
+	"time"
 )
 
 func getLatestDatapoint(datapoints []*cloudwatch.Datapoint) *cloudwatch.Datapoint {
@@ -30,7 +31,16 @@ func scrape(collector *cwCollector, ch chan<- prometheus.Metric) {
 		Region: aws.String(collector.Region),
 	}))
 
-	svc := cloudwatch.New(session)
+	var svc *cloudwatch.CloudWatch
+
+	if collector.RoleArn != "" {
+		// Create the credentials from AssumeRoleProvider to assume the role
+		creds := stscreds.NewCredentials(session, collector.RoleArn)
+		// Create service client value configured for credentials from assumed role.
+		svc = cloudwatch.New(session, &aws.Config{Credentials: creds})
+	} else {
+		svc = cloudwatch.New(session)
+	}
 	for m := range collector.Template.Metrics {
 		metric := &collector.Template.Metrics[m]
 
