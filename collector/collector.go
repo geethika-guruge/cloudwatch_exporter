@@ -4,8 +4,9 @@ import (
 	"errors"
 	"time"
 
+	"../config"
+
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/technofy/cloudwatch_exporter/config"
 )
 
 var (
@@ -35,6 +36,19 @@ type cwCollector struct {
 	ScrapeTime        prometheus.Gauge
 	ErroneousRequests prometheus.Counter
 	Template          *cwCollectorTemplate
+}
+
+func RegisterGlobalCounter() {
+	globalRegistry = prometheus.NewRegistry()
+
+	totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "cloudwatch_requests_total",
+		Help: "API requests made to CloudWatch",
+	})
+
+	globalRegistry.MustRegister(totalRequests)
+
+	prometheus.DefaultGatherer = globalRegistry
 }
 
 // generateTemplates creates pre-generated metrics descriptions so that only the metrics are created from them during a scrape.
@@ -94,16 +108,7 @@ func NewCwCollector(target string, taskName string, region string, roleArn strin
 			region = task.DefaultRegion
 		}
 	}
-	globalRegistry = prometheus.NewRegistry()
 
-	totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "cloudwatch_requests_total",
-		Help: "API requests made to CloudWatch",
-	})
-
-	globalRegistry.MustRegister(totalRequests)
-
-	prometheus.DefaultGatherer = globalRegistry
 	return &cwCollector{
 		Region:  region,
 		Target:  target,

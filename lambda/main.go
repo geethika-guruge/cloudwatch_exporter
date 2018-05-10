@@ -1,43 +1,35 @@
 package main
 
 import (
-	"flag"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-
-	"github.com/technofy/cloudwatch_exporter/collector"
-
 	"os"
 	"sync"
+
+	"../collector"
+	"../config"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/technofy/cloudwatch_exporter/config"
 )
 
 type Request struct {
+	Target  string `json:"target"`
 	Task    string `json:"task"`
 	Region  string `json:"region"`
 	RoleArn string `json:"roleArn"`
 }
 
 type Response struct {
-	Message string `json:"message"`
-	Ok      bool   `json:"ok"`
+	ScrapeResult string `json:"scrape_result"`
 }
 
 var (
-	listenAddress = flag.String("web.listen-address", ":9042", "Address on which to expose metrics and web interface.")
-	metricsPath   = flag.String("web.telemetry-path", "/metrics", "Path under which to expose exporter's metrics.")
-	scrapePath    = flag.String("web.telemetry-scrape-path", "/scrape", "Path under which to expose CloudWatch metrics.")
-	configFile    = flag.String("config.file", "config.yml", "Path to configuration file.")
-
-	globalRegistry *prometheus.Registry
-	settings       *config.Settings
-	totalRequests  prometheus.Counter
-	configMutex    = &sync.Mutex{}
+	settings    *config.Settings
+	configMutex = &sync.Mutex{}
 )
 
 func loadConfigFile() error {
@@ -46,7 +38,7 @@ func loadConfigFile() error {
 	configMutex.Lock()
 
 	// Initial loading of the configuration file
-	tmpSettings, err = config.Load(*configFile)
+	tmpSettings, err = config.Load("config.yml")
 	if err != nil {
 		return err
 	}
@@ -59,33 +51,16 @@ func loadConfigFile() error {
 	return nil
 }
 
-// handleReload handles a full reload of the configuration file and regenerates the collector templates.
-func handleReload(w http.ResponseWriter, req *http.Request) {
-	err := loadConfigFile()
-	if err != nil {
-		str := fmt.Sprintf("Can't read configuration file: %s", err.Error())
-		fmt.Fprintln(w, str)
-		fmt.Println(str)
-	}
-	fmt.Fprintln(w, "Reload complete")
-}
-
 // handleTarget handles scrape requests which make use of CloudWatch service
 func handleTarget(request Request) (Response, error) {
-	req := httptest.NewRequest("GET", "http://example.com/foo", nil)
+	req, reqErr := http.NewRequest("GET", "http://example.com/foo", nil)
+
+	if reqErr != nil {
+		fmt.Printf("Can't create new request: %s\n", reqErr.Error())
+		os.Exit(-1)
+	}
+
 	w := httptest.NewRecorder()
-	flag.Parse()
-
-	globalRegistry = prometheus.NewRegistry()
-
-	totalRequests = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "cloudwatch_requests_total",
-		Help: "API requests made to CloudWatch",
-	})
-
-	globalRegistry.MustRegister(totalRequests)
-
-	prometheus.DefaultGatherer = globalRegistry
 
 	err := loadConfigFile()
 	if err != nil {
@@ -93,10 +68,11 @@ func handleTarget(request Request) (Response, error) {
 		os.Exit(-1)
 	}
 
+	collector.RegisterGlobalCounter()
+
 	fmt.Println("CloudWatch exporter started...")
 
-	target := "target"
-	fmt.Println(request.Task)
+	target := request.Target
 	task := request.Task
 
 	region := request.Region
@@ -104,12 +80,10 @@ func handleTarget(request Request) (Response, error) {
 
 	// Check if we have all the required parameters in the URL
 	if task == "" {
-		//fmt.Fprintln(w, "Error: Missing task parameter")
 		fmt.Println("Error: Missing task parameter")
 		return Response{
-			Message: fmt.Sprintf("Error"),
-			Ok:      true,
-		}, nil
+			ScrapeResult: "Error",
+		}, errors.New("Error: Missing task parameter")
 	}
 
 	configMutex.Lock()
@@ -117,13 +91,11 @@ func handleTarget(request Request) (Response, error) {
 	collector, err := collector.NewCwCollector(target, task, region, roleArn, settings)
 	if err != nil {
 		// Can't create the collector, display error
-		//fmt.Fprintf(w, "Error: %s\n", err.Error())
 		fmt.Println("Error: %s\n", err.Error())
 		configMutex.Unlock()
 		return Response{
-			Message: fmt.Sprintf("Error"),
-			Ok:      true,
-		}, nil
+			ScrapeResult: "Error",
+		}, err
 	}
 
 	registry.MustRegister(collector)
@@ -134,13 +106,15 @@ func handleTarget(request Request) (Response, error) {
 	// Serve the answer through the Collect method of the Collector
 	handler.ServeHTTP(w, req)
 	configMutex.Unlock()
+
+	// Print total number of API requests made to CloudWatch.
+	fmt.Println(prometheus.DefaultGatherer.Gather())
+
 	return Response{
-		Message: fmt.Sprintf(string(w.Body.Bytes()[:len(w.Body.Bytes())])),
-		Ok:      true,
+		ScrapeResult: fmt.Sprintf(string(w.Body.Bytes()[:len(w.Body.Bytes())])),
 	}, nil
 }
 
 func main() {
-
 	lambda.Start(handleTarget)
 }
