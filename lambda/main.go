@@ -8,12 +8,11 @@ import (
 	"os"
 	"sync"
 
-	"../collector"
-	"../config"
-
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/technofy/cloudwatch_exporter/collector"
+	"github.com/technofy/cloudwatch_exporter/config"
 )
 
 type Request struct {
